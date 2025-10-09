@@ -1,0 +1,22 @@
+{
+  "name": "tracer",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "bin": {
+    "async-doctor-trace": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rimraf dist",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.2",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.5.4"
+  }
+}
