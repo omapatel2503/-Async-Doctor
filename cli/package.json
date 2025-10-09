@@ -1,0 +1,24 @@
+{
+  "name": "cli",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "bin": {
+    "async-doctor": "dist/index.js"
+  },
+  "dependencies": {
+    "@typescript-eslint/parser": "^5.0.0",
+    "commander": "^10.0.0",
+    "eslint": "^8.57.1",
+    "@typescript-eslint/utils": "^5.0.0",
+    "@typescript-eslint/visitor-keys": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/eslint": "^9.6.1",
+    "@types/node": "^18.0.0",
+    "typescript": "^5.0.0"
+  }
+}
