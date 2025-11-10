@@ -61,6 +61,7 @@ steps:
         -e "s#REG-docker.pkg.dev/PROJ/REPO/server:SHORT_SHA#$$IMG_BASE/server:${SHORT_SHA}#g" \
         -e "s#REG-docker.pkg.dev/PROJ/REPO/web:SHORT_SHA#$$IMG_BASE/web:${SHORT_SHA}#g"
 
+
 # Apply manifests
 - name: gcr.io/cloud-builders/kubectl
   args: ["apply","-f","k8s/namespace.yaml","-f","k8s/pvc.yaml","-f","k8s/config.yaml"]
