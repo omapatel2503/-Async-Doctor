@@ -8,8 +8,6 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "postinstall": "patch-package",
-    "prepare": "postinstall-postinstall"
   },
   "dependencies": {
     "cytoscape": "^3.33.1",
