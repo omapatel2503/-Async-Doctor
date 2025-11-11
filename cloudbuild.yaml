@@ -2,26 +2,28 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 substitutions:
-  _REGION: us-central1
-  _REPO: async
-  _CLUSTER: async-cluster
-  _NAMESPACE: async-doctor
+  _REGION: us-central1        # Artifact Registry region
+  _REPO: async                # Artifact Registry repo name
+  _CLUSTER: async-cluster     # GKE Autopilot cluster name
+  _NAMESPACE: async-doctor    # Kubernetes namespace
 
 steps:
-# Auth to Artifact Registry for docker
+# 1) Auth Docker to Artifact Registry
 - name: gcr.io/cloud-builders/gcloud
   entrypoint: bash
   args:
     - -c
     - |
+      set -euo pipefail
       gcloud auth configure-docker ${_REGION}-docker.pkg.dev -q
 
-# Build images
+# 2) Build images
 - name: gcr.io/cloud-builders/docker
   dir: server
   args:
     [
-      "build","-t","${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/server:${SHORT_SHA}",
+      "build",
+      "-t","${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/server:${SHORT_SHA}",
       "."
     ]
 
@@ -29,46 +31,90 @@ steps:
   dir: web
   args:
     [
-      "build","-t","${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/web:${SHORT_SHA}",
+      "build",
+      "-t","${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/web:${SHORT_SHA}",
       "--build-arg","VITE_API_BASE=/api",
       "."
     ]
 
-# Push images
+# 3) Push images
 - name: gcr.io/cloud-builders/docker
   args: ["push","${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/server:${SHORT_SHA}"]
 
 - name: gcr.io/cloud-builders/docker
   args: ["push","${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/web:${SHORT_SHA}"]
 
-# Fetch cluster credentials
+# 4) Fetch cluster credentials
 - name: gcr.io/cloud-builders/gcloud
   args:
     [
       "container","clusters","get-credentials","${_CLUSTER}",
-      "--region","${_REGION}","--project","$PROJECT_ID"
+      "--region","${_REGION}",
+      "--project","$PROJECT_ID"
     ]
 
-# Substitute images in k8s yamls (REG/PROJ/REPO/SHORT_SHA)
+# 5) Substitute image tags in K8s YAML (fix: use $IMG_BASE, not $$IMG_BASE)
 - name: gcr.io/cloud-builders/gcloud
   entrypoint: bash
   args:
     - -c
     - |
+      set -euxo pipefail
       IMG_BASE="${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}"
-      find k8s -type f -name '*.yaml' -print0 | xargs -0 sed -i \
-        -e "s#REG-docker.pkg.dev/PROJ/REPO/server:SHORT_SHA#${IMG_BASE}/server:${SHORT_SHA}#g" \
-        -e "s#REG-docker.pkg.dev/PROJ/REPO/web:SHORT_SHA#${IMG_BASE}/web:${SHORT_SHA}#g"
+      echo "Using IMG_BASE=$IMG_BASE, SHORT_SHA=${SHORT_SHA}"
 
-# Apply manifests
+      find k8s -type f -name '*.yaml' -print0 | xargs -0 sed -i \
+        -e "s#REG-docker.pkg.dev/PROJ/REPO/server:SHORT_SHA#$IMG_BASE/server:${SHORT_SHA}#g" \
+        -e "s#REG-docker.pkg.dev/PROJ/REPO/web:SHORT_SHA#$IMG_BASE/web:${SHORT_SHA}#g"
+
+
+      echo "Images after substitution:"
+      grep -n "image:" k8s/*.yaml || true
+
+# 6) Apply core resources
 - name: gcr.io/cloud-builders/kubectl
   args: ["apply","-f","k8s/namespace.yaml","-f","k8s/pvc.yaml","-f","k8s/config.yaml"]
   env:
     - "CLOUDSDK_COMPUTE_REGION=${_REGION}"
     - "CLOUDSDK_CONTAINER_CLUSTER=${_CLUSTER}"
 
+# 7) Apply workloads (deployments/services/ingress)
 - name: gcr.io/cloud-builders/kubectl
-  args: ["apply","-f","k8s/server.deployment.yaml","-f","k8s/server.service.yaml","-f","k8s/web.deployment.yaml","-f","k8s/web.service.yaml","-f","k8s/ingress.yaml"]
+  args:
+    [
+      "apply",
+      "-f","k8s/server.deployment.yaml",
+      "-f","k8s/server.service.yaml",
+      "-f","k8s/web.deployment.yaml",
+      "-f","k8s/web.service.yaml",
+      "-f","k8s/ingress.yaml"
+    ]
+  env:
+    - "CLOUDSDK_COMPUTE_REGION=${_REGION}"
+    - "CLOUDSDK_CONTAINER_CLUSTER=${_CLUSTER}"
+
+# 8) Rollout status checks (fail build if rollout fails)
+- name: gcr.io/cloud-builders/kubectl
+  args: ["-n","${_NAMESPACE}","rollout","status","deploy/server","--timeout=300s"]
+  env:
+    - "CLOUDSDK_COMPUTE_REGION=${_REGION}"
+    - "CLOUDSDK_CONTAINER_CLUSTER=${_CLUSTER}"
+
+- name: gcr.io/cloud-builders/kubectl
+  args: ["-n","${_NAMESPACE}","rollout","status","deploy/web","--timeout=300s"]
+  env:
+    - "CLOUDSDK_COMPUTE_REGION=${_REGION}"
+    - "CLOUDSDK_CONTAINER_CLUSTER=${_CLUSTER}"
+
+# 9) Print final images deployed
+- name: gcr.io/cloud-builders/kubectl
+  args: ["-n","${_NAMESPACE}","get","deploy/server","-o","jsonpath={.spec.template.spec.containers[0].image}"]
+  env:
+    - "CLOUDSDK_COMPUTE_REGION=${_REGION}"
+    - "CLOUDSDK_CONTAINER_CLUSTER=${_CLUSTER}"
+
+- name: gcr.io/cloud-builders/kubectl
+  args: ["-n","${_NAMESPACE}","get","deploy/web","-o","jsonpath={.spec.template.spec.containers[0].image}"]
   env:
     - "CLOUDSDK_COMPUTE_REGION=${_REGION}"
     - "CLOUDSDK_CONTAINER_CLUSTER=${_CLUSTER}"
