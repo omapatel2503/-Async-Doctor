@@ -5,8 +5,9 @@ metadata:
   namespace: async-doctor
 spec:
   healthCheck:
+    # Use the container's health endpoint
     requestPath: /api/health
-    port: 80
+    # Don't set a fixed port so GKE uses the NEG serving port (targetPort: 4000)
     checkIntervalSec: 5
     timeoutSec: 5
     healthyThreshold: 2
