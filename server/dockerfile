@@ -13,13 +13,13 @@ COPY package*.json ./
 # Install all dependencies
 RUN npm install --legacy-peer-deps
 
-# Copy tsconfig.json (needed for Prisma to detect CommonJS)
+# Copy configuration
 COPY tsconfig.json ./
 
 # Copy Prisma schema
 COPY prisma ./prisma
 
-# Generate Prisma Client with correct binary targets
+# Generate Prisma Client (goes to node_modules/.prisma/client by default)
 RUN npx prisma generate
 
 # Copy source code
@@ -51,16 +51,13 @@ ENV RATE_LIMIT_MAX=100
 # Copy package files
 COPY package*.json ./
 
-# Install production dependencies (includes TypeScript, Prisma)
+# Install production dependencies (includes Prisma)
 RUN npm install --legacy-peer-deps --only=production
-
-# Copy tsconfig.json
-COPY tsconfig.json ./
 
 # Copy Prisma schema
 COPY prisma ./prisma
 
-# Generate Prisma Client for production with correct binaries
+# Generate Prisma Client for production (creates in node_modules)
 RUN npx prisma generate
 
 # Copy built application from build stage
