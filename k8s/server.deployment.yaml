@@ -16,21 +16,6 @@ spec:
           # Cloud Build will substitute this image on deploy
           image: REG-docker.pkg.dev/PROJ/REPO/server:SHORT_SHA
           imagePullPolicy: IfNotPresent
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 4000
-            periodSeconds: 5
-            timeoutSeconds: 3
-            failureThreshold: 3
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 4000
-            initialDelaySeconds: 120
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 10
           ports:
             - containerPort: 4000
           envFrom:
