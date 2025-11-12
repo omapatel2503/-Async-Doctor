@@ -5,6 +5,7 @@ metadata:
   namespace: async-doctor
   annotations:
     cloud.google.com/neg: '{"ingress": true}'
+    cloud.google.com/backend-config: '{"default": "server-backendconfig"}'
 spec:
   selector: { app: async-doctor, tier: server }
   ports:

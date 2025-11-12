@@ -21,6 +21,17 @@ spec:
           envFrom:
             - configMapRef: { name: server-config }
             - secretRef:    { name: ollama-secret }
+          env:
+            - name: OLLAMA_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ollama-secret
+                  key: OLLAMA_API_KEY
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ollama-secret
+                  key: DATABASE_URL
           volumeMounts:
             - name: jobs
               mountPath: /app/jobs
