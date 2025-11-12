@@ -8,7 +8,7 @@ substitutions:
   _NAMESPACE: async-doctor
 
 steps:
-# Auth to Artifact Registry for docker
+# 1) Auth to Artifact Registry for docker
 - name: gcr.io/cloud-builders/gcloud
   entrypoint: bash
   args:
@@ -16,7 +16,7 @@ steps:
     - |
       gcloud auth configure-docker ${_REGION}-docker.pkg.dev -q
 
-# Build images
+# 2) Build images
 - name: gcr.io/cloud-builders/docker
   dir: server
   args:
@@ -34,14 +34,14 @@ steps:
       "."
     ]
 
-# Push images
+# 3) Push images
 - name: gcr.io/cloud-builders/docker
   args: ["push","${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/server:${SHORT_SHA}"]
 
 - name: gcr.io/cloud-builders/docker
   args: ["push","${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/web:${SHORT_SHA}"]
 
-# Fetch cluster credentials
+# 4) Fetch cluster credentials (kubectl auth)
 - name: gcr.io/cloud-builders/gcloud
   args:
     [
@@ -49,26 +49,78 @@ steps:
       "--region","${_REGION}","--project","$PROJECT_ID"
     ]
 
-# Substitute images in k8s yamls (REG/PROJ/REPO/SHORT_SHA)
+# 5) Substitute image placeholders in k8s manifests
 - name: gcr.io/cloud-builders/gcloud
   entrypoint: bash
   args:
     - -c
     - |
+      set -euo pipefail
       IMG_BASE="${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}"
-      find k8s -type f -name '*.yaml' -print0 | xargs -0 sed -i \
-        -e "s#REG-docker.pkg.dev/PROJ/REPO/server:SHORT_SHA#$${IMG_BASE}/server:${SHORT_SHA}#g" \
-        -e "s#REG-docker.pkg.dev/PROJ/REPO/web:SHORT_SHA#$${IMG_BASE}/web:${SHORT_SHA}#g"
+      find k8s -type f -name '*.yaml' -print0 | xargs -0 sed -i         -e "s#REG-docker.pkg.dev/PROJ/REPO/server:SHORT_SHA#${IMG_BASE}/server:${SHORT_SHA}#g"         -e "s#REG-docker.pkg.dev/PROJ/REPO/web:SHORT_SHA#${IMG_BASE}/web:${SHORT_SHA}#g"
 
-# Apply manifests
+# 6) Apply base manifests (ns/config/pvc)
 - name: gcr.io/cloud-builders/kubectl
   args: ["apply","-f","k8s/namespace.yaml","-f","k8s/pvc.yaml","-f","k8s/config.yaml"]
   env:
     - "CLOUDSDK_COMPUTE_REGION=${_REGION}"
     - "CLOUDSDK_CONTAINER_CLUSTER=${_CLUSTER}"
 
+# 7) Apply services, deployments, ingress, backendconfig
 - name: gcr.io/cloud-builders/kubectl
-  args: ["apply","-f","k8s/server.deployment.yaml","-f","k8s/server.service.yaml","-f","k8s/web.deployment.yaml","-f","k8s/web.service.yaml","-f","k8s/ingress.yaml"]
+  args:
+    [
+      "apply",
+      "-f","k8s/server.backendconfig.yaml",
+      "-f","k8s/server.service.yaml",
+      "-f","k8s/server.deployment.yaml",
+      "-f","k8s/web.service.yaml",
+      "-f","k8s/web.deployment.yaml",
+      "-f","k8s/ingress.yaml"
+    ]
+  env:
+    - "CLOUDSDK_COMPUTE_REGION=${_REGION}"
+    - "CLOUDSDK_CONTAINER_CLUSTER=${_CLUSTER}"
+
+# 8) Apply autoscaling (HPAs) and PDB
+- name: gcr.io/cloud-builders/kubectl
+  args:
+    [
+      "apply",
+      "-f","k8s/server.hpa.yaml",
+      "-f","k8s/web.hpa.yaml",
+      "-f","k8s/server.pdb.yaml"
+    ]
+  env:
+    - "CLOUDSDK_COMPUTE_REGION=${_REGION}"
+    - "CLOUDSDK_CONTAINER_CLUSTER=${_CLUSTER}"
+
+# 9) Wait for rollout to finish (server + web)
+- name: gcr.io/cloud-builders/kubectl
+  args:
+    [
+      "rollout","status","deployment/server",
+      "-n","${_NAMESPACE}",
+      "--timeout=5m"
+    ]
+  env:
+    - "CLOUDSDK_COMPUTE_REGION=${_REGION}"
+    - "CLOUDSDK_CONTAINER_CLUSTER=${_CLUSTER}"
+
+- name: gcr.io/cloud-builders/kubectl
+  args:
+    [
+      "rollout","status","deployment/web",
+      "-n","${_NAMESPACE}",
+      "--timeout=5m"
+    ]
+  env:
+    - "CLOUDSDK_COMPUTE_REGION=${_REGION}"
+    - "CLOUDSDK_CONTAINER_CLUSTER=${_CLUSTER}"
+
+# 10) (Optional) show HPA state for logs
+- name: gcr.io/cloud-builders/kubectl
+  args: ["get","hpa","-n","${_NAMESPACE}","-o","wide"]
   env:
     - "CLOUDSDK_COMPUTE_REGION=${_REGION}"
     - "CLOUDSDK_CONTAINER_CLUSTER=${_CLUSTER}"

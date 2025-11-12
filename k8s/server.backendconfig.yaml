@@ -5,9 +5,9 @@ metadata:
   namespace: async-doctor
 spec:
   healthCheck:
+    requestPath: /api/health
+    port: 80
     checkIntervalSec: 5
     timeoutSec: 5
     healthyThreshold: 2
     unhealthyThreshold: 3
-    requestPath: /api/health
-    port: 80   # hits Service:80 -> targetPort:4000 in the Pod

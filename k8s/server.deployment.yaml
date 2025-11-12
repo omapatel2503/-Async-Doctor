@@ -13,7 +13,6 @@ spec:
     spec:
       containers:
         - name: server
-          # Cloud Build will substitute this image on deploy
           image: REG-docker.pkg.dev/PROJ/REPO/server:SHORT_SHA
           imagePullPolicy: IfNotPresent
           ports:
@@ -24,14 +23,28 @@ spec:
           env:
             - name: OLLAMA_API_KEY
               valueFrom:
-                secretKeyRef:
-                  name: ollama-secret
-                  key: OLLAMA_API_KEY
+                secretKeyRef: { name: ollama-secret, key: OLLAMA_API_KEY }
             - name: DATABASE_URL
               valueFrom:
-                secretKeyRef:
-                  name: ollama-secret
-                  key: DATABASE_URL
+                secretKeyRef: { name: ollama-secret, key: DATABASE_URL }
+          # Health probes (what the LB and HPA rely on during scale)
+          livenessProbe:
+            httpGet: { path: /api/health, port: 4000 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /api/health, port: 4000 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          # optional but helpful if startup is heavy
+          startupProbe:
+            httpGet: { path: /api/health, port: 4000 }
+            failureThreshold: 30
+            periodSeconds: 3
           volumeMounts:
             - name: jobs
               mountPath: /app/jobs
