@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ## Async Doctor 
 
 
@@ -299,3 +300,6 @@ steps:
 ## Credits
 
 - Inspired by research ideas from **DrAsync** (ICSE’22) regarding async anti‑pattern detection and visualization.
+=======
+
+>>>>>>> 318b3ff344a8a1048c1ac8b20ac127cc3eff955f
